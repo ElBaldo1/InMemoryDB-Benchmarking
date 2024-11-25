@@ -1,27 +1,33 @@
+# General target directory (build artifacts)
 target/
-!.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
 
-### IntelliJ IDEA ###
-.idea/modules.xml
-.idea/jarRepositories.xml
-.idea/compiler.xml
-.idea/libraries/
+# Maven wrapper
+!.mvn/wrapper/maven-wrapper.jar
+
+# IntelliJ IDEA specific files
+.idea/
 *.iws
 *.iml
 *.ipr
 
-### Eclipse ###
+# Exclude IntelliJ library configurations
+.idea/modules.xml
+.idea/jarRepositories.xml
+.idea/compiler.xml
+.idea/libraries/
+
+# Eclipse IDE specific files
 .apt_generated
 .classpath
 .factorypath
 .project
-.settings
+.settings/
 .springBeans
 .sts4-cache
 
-### NetBeans ###
+# NetBeans IDE specific files
 /nbproject/private/
 /nbbuild/
 /dist/
@@ -31,8 +37,11 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
-### VS Code ###
+# Visual Studio Code specific files
 .vscode/
 
-### Mac OS ###
+# macOS specific files
 .DS_Store
+
+# Ignore JSON files in the resources directory
+src/main/resources/*.json
