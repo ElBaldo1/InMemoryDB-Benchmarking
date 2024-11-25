@@ -45,3 +45,4 @@ build/
 .DS_Store
 
 
+src/main/resources/parsed_NASA_access_log.json
