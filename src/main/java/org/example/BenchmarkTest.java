@@ -13,17 +13,31 @@ import org.apache.log4j.PropertyConfigurator;
 import java.util.*;
 import java.io.*;
 
+/**
+ * BenchmarkTest is a benchmarking tool that evaluates the performance of Redis and Memcached
+ * using the YCSB (Yahoo Cloud Serving Benchmark) framework. It measures the time taken for
+ * INSERT and READ operations on datasets of varying sizes and records the results in a CSV file.
+ */
 public class BenchmarkTest {
 
     // Define the dataset sizes to be tested
-    private static final int[] DATASET_SIZES = {1000, 10000,100000,1000000};
+    private static final int[] DATASET_SIZES = {1000, 10000, 100000, 1000000};
+
+    // Path to the output CSV file
+    private static final String OUTPUT_CSV_FILE = "src/main/java/org/example/output/benchmark_results.csv";
 
     public static void main(String[] args) throws Exception {
+        System.out.println("Current Working Directory: " + System.getProperty("user.dir"));
+
         // Configure Log4j using the properties file
         PropertyConfigurator.configure(BenchmarkTest.class.getClassLoader().getResource("log4j.properties"));
 
         // Set the logging level for memcached to ERROR to suppress INFO logs
         Logger.getLogger("net.spy.memcached").setLevel(org.apache.log4j.Level.ERROR);
+
+        // Initialize the CSV writer
+        CSVWriter csvWriter = new CSVWriter(OUTPUT_CSV_FILE);
+        csvWriter.writeHeader("Database", "Dataset Size", "Operation", "Time (ms)");
 
         // Start benchmarking for Redis
         System.out.println("\n===============================================");
@@ -40,8 +54,8 @@ public class BenchmarkTest {
             // Initialize Redis-specific properties
             Properties redisProps = initializeRedisProperties(size);
 
-            // Run the benchmark for Redis
-            runBenchmark(redisProps, size, "Redis");
+            // Run the benchmark for Redis and record the results
+            runBenchmark(redisProps, size, "Redis", csvWriter);
         }
 
         // Start benchmarking for Memcached
@@ -59,14 +73,17 @@ public class BenchmarkTest {
             // Initialize Memcached-specific properties
             Properties memcachedProps = initializeMemcachedProperties(size);
 
-            // Run the benchmark for Memcached
-            runBenchmark(memcachedProps, size, "Memcached");
+            // Run the benchmark for Memcached and record the results
+            runBenchmark(memcachedProps, size, "Memcached", csvWriter);
         }
 
         // Indicate that benchmarking is complete
         System.out.println("\n===============================================");
         System.out.println("               Benchmark Complete");
         System.out.println("===============================================\n");
+
+        // Close the CSV writer to ensure all data is flushed and resources are released
+        csvWriter.close();
     }
 
     /**
@@ -103,14 +120,15 @@ public class BenchmarkTest {
     }
 
     /**
-     * Executes the benchmarking process for a given database configuration.
+     * Executes the benchmarking process for a given database configuration and records the results.
      *
      * @param props      The properties/configuration for the database.
      * @param datasetSize The size of the dataset to be used.
      * @param dbName     The name of the database (e.g., Redis, Memcached).
+     * @param csvWriter  The CSVWriter instance to record the results.
      * @throws Exception If an error occurs during benchmarking.
      */
-    private static void runBenchmark(Properties props, int datasetSize, String dbName) throws Exception {
+    private static void runBenchmark(Properties props, int datasetSize, String dbName, CSVWriter csvWriter) throws Exception {
         // Set the benchmarking properties
         Measurements.setProperties(props);
 
@@ -126,11 +144,13 @@ public class BenchmarkTest {
         // Load the dataset from the JSON file
         List<Map<String, ByteIterator>> dataset = loadDataset(datasetSize);
 
-        // Perform the insertion benchmark
-        performInsertionBenchmark(db, dataset, dbName);
+        // Perform the insertion benchmark and record the result
+        long insertTime = performInsertionBenchmark(db, dataset, dbName);
+        csvWriter.writeRecord(dbName, String.valueOf(datasetSize), "INSERT", String.valueOf(insertTime));
 
-        // Perform the read benchmark
-        performReadBenchmark(db, dataset, dbName);
+        // Perform the read benchmark and record the result
+        long readTime = performReadBenchmark(db, dataset, dbName);
+        csvWriter.writeRecord(dbName, String.valueOf(datasetSize), "READ", String.valueOf(readTime));
 
         // Clean up the database connections and resources
         db.cleanup();
@@ -142,9 +162,10 @@ public class BenchmarkTest {
      * @param db      The database instance.
      * @param dataset The dataset containing records to insert.
      * @param dbName  The name of the database (for logging purposes).
+     * @return The time taken for the insertion process in milliseconds.
      * @throws Exception If an error occurs during insertion.
      */
-    private static void performInsertionBenchmark(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
+    private static long performInsertionBenchmark(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
         // Log the start of the INSERT benchmark
         System.out.println("\n*** Testing INSERT operation on " + dbName + " ***");
 
@@ -160,8 +181,13 @@ public class BenchmarkTest {
         // Record the end time of the insertion process
         long insertEndTime = System.currentTimeMillis();
 
-        // Calculate and log the total time taken for insertion
-        System.out.println("Insertion time: " + (insertEndTime - insertStartTime) + " ms");
+        // Calculate the total time taken for insertion
+        long insertionTime = insertEndTime - insertStartTime;
+
+        // Log the total time taken for insertion
+        System.out.println("Insertion time: " + insertionTime + " ms");
+
+        return insertionTime;
     }
 
     /**
@@ -170,9 +196,10 @@ public class BenchmarkTest {
      * @param db      The database instance.
      * @param dataset The dataset containing records to read.
      * @param dbName  The name of the database (for logging purposes).
+     * @return The time taken for the read process in milliseconds.
      * @throws Exception If an error occurs during reading.
      */
-    private static void performReadBenchmark(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
+    private static long performReadBenchmark(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
         // Log the start of the READ benchmark
         System.out.println("\n*** Testing READ operation on " + dbName + " ***");
 
@@ -190,8 +217,13 @@ public class BenchmarkTest {
         // Record the end time of the read process
         long readEndTime = System.currentTimeMillis();
 
-        // Calculate and log the total time taken for reading
-        System.out.println("Read time: " + (readEndTime - readStartTime) + " ms");
+        // Calculate the total time taken for reading
+        long readTime = readEndTime - readStartTime;
+
+        // Log the total time taken for reading
+        System.out.println("Read time: " + readTime + " ms");
+
+        return readTime;
     }
 
     /**
