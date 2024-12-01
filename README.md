@@ -49,5 +49,5 @@ jar tf target/memdbJava-1.0-SNAPSHOT.jar | grep MemcachedClient
 ```bash
 java -Xmx4g -jar target/memdbJava-1.0-SNAPSHOT.jar
 ```
-
+# To see the results of the benchmarking, create the folder 'output' in the directory of the benchmarkTest.java file
 # For more details check the comments in the files
