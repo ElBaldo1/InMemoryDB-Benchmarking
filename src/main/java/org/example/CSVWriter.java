@@ -8,7 +8,7 @@ import java.io.PrintWriter;
  * CSVWriter is a utility class for writing benchmark results to a CSV file.
  */
 public class CSVWriter {
-    private PrintWriter writer;
+    private final PrintWriter writer;
 
     /**
      * Constructs a CSVWriter with the specified file path.
@@ -17,7 +17,6 @@ public class CSVWriter {
      * @throws IOException If an I/O error occurs.
      */
     public CSVWriter(String filePath) throws IOException {
-        // Initialize the PrintWriter with the specified file path
         writer = new PrintWriter(new FileWriter(filePath, false)); // 'false' to overwrite existing file
     }
 

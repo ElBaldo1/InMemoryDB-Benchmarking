@@ -49,5 +49,10 @@ jar tf target/memdbJava-1.0-SNAPSHOT.jar | grep MemcachedClient
 ```bash
 java -Xmx4g -jar target/memdbJava-1.0-SNAPSHOT.jar
 ```
-# To see the results of the benchmarking, create the folder 'output' in the directory of the benchmarkTest.java file
+### To see the results of the benchmarking, create the folder 'output' in the directory of the benchmarkTest.java file
 # For more details check the comments in the files
+
+### The result map in custom query does not contain the key "http_reply_code" or "bytes" for some records, so result.get("http_reply_code") or result.get("bytes") returns null, leading to the NullPointerException when calling toString() on null.
+### We can choose to skip these records, assign default values, or log a warning. I have chosen to assign default values to avoid the NullPointerException.
+For both 'http_reply_code' and 'bytes' fields, if they are missing (replyCodeBI == null or bytesBI == null), we assign default values of "0" and "0.0", respectively.
+If parsing fails, we assign default numerical values to replyCode and bytes.

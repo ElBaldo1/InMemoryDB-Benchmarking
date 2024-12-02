@@ -16,18 +16,25 @@ import java.io.*;
 /**
  * BenchmarkTest is a benchmarking tool that evaluates the performance of Redis and Memcached
  * using the YCSB (Yahoo Cloud Serving Benchmark) framework. It measures the time taken for
- * INSERT and READ operations on datasets of varying sizes and records the results in a CSV file.
+ * INSERT, READ, UPDATE, DELETE operations on datasets of varying sizes and records the results in a CSV file.
+ * It also performs custom queries with filters based on the data structure.
  */
 public class BenchmarkTest {
 
     // Define the dataset sizes to be tested
-    private static final int[] DATASET_SIZES = {1000, 10000, 100000, 1000000};
+    private static final int[] DATASET_SIZES = {1000, 10000, 100000};
 
     // Path to the output CSV file
-    private static final String OUTPUT_CSV_FILE = "src/main/java/org/example/output/benchmark_results.csv";
+    private static final String OUTPUT_CSV_FILE = "output/benchmark_results.csv";
 
     public static void main(String[] args) throws Exception {
         System.out.println("Current Working Directory: " + System.getProperty("user.dir"));
+
+        // Ensure the output directory exists
+        File outputDir = new File("output");
+        if (!outputDir.exists()) {
+            outputDir.mkdirs();
+        }
 
         // Configure Log4j using the properties file
         PropertyConfigurator.configure(BenchmarkTest.class.getClassLoader().getResource("log4j.properties"));
@@ -122,10 +129,10 @@ public class BenchmarkTest {
     /**
      * Executes the benchmarking process for a given database configuration and records the results.
      *
-     * @param props      The properties/configuration for the database.
+     * @param props       The properties/configuration for the database.
      * @param datasetSize The size of the dataset to be used.
-     * @param dbName     The name of the database (e.g., Redis, Memcached).
-     * @param csvWriter  The CSVWriter instance to record the results.
+     * @param dbName      The name of the database (e.g., Redis, Memcached).
+     * @param csvWriter   The CSVWriter instance to record the results.
      * @throws Exception If an error occurs during benchmarking.
      */
     private static void runBenchmark(Properties props, int datasetSize, String dbName, CSVWriter csvWriter) throws Exception {
@@ -152,6 +159,18 @@ public class BenchmarkTest {
         long readTime = performReadBenchmark(db, dataset, dbName);
         csvWriter.writeRecord(dbName, String.valueOf(datasetSize), "READ", String.valueOf(readTime));
 
+        // Perform the update benchmark and record the result
+        long updateTime = performUpdateBenchmark(db, dataset, dbName);
+        csvWriter.writeRecord(dbName, String.valueOf(datasetSize), "UPDATE", String.valueOf(updateTime));
+
+        // Perform the delete benchmark and record the result
+        long deleteTime = performDeleteBenchmark(db, dataset, dbName);
+        csvWriter.writeRecord(dbName, String.valueOf(datasetSize), "DELETE", String.valueOf(deleteTime));
+
+        // Perform custom queries and record the results
+        long customQueryTime = performCustomQuery(db, dataset, dbName);
+        csvWriter.writeRecord(dbName, String.valueOf(datasetSize), "CUSTOM_QUERY", String.valueOf(customQueryTime));
+
         // Clean up the database connections and resources
         db.cleanup();
     }
@@ -174,7 +193,7 @@ public class BenchmarkTest {
 
         // Iterate through each record in the dataset and insert it into the database
         for (int i = 0; i < dataset.size(); i++) {
-            String key = "user" + i; // Generate a unique key for each record
+            String key = "record" + i; // Generate a unique key for each record
             db.insert("usertable", key, dataset.get(i)); // Insert the record
         }
 
@@ -208,7 +227,7 @@ public class BenchmarkTest {
 
         // Iterate through each record in the dataset and read it from the database
         for (int i = 0; i < dataset.size(); i++) {
-            String key = "user" + i; // Generate the key corresponding to the record
+            String key = "record" + i; // Generate the key corresponding to the record
             Set<String> fields = null; // Specify null to read all fields
             HashMap<String, ByteIterator> result = new HashMap<>(); // Container to hold the read result
             db.read("usertable", key, fields, result); // Perform the read operation
@@ -224,6 +243,185 @@ public class BenchmarkTest {
         System.out.println("Read time: " + readTime + " ms");
 
         return readTime;
+    }
+
+    /**
+     * Performs the update benchmark by updating records in the database.
+     *
+     * @param db      The database instance.
+     * @param dataset The dataset containing records to update.
+     * @param dbName  The name of the database (for logging purposes).
+     * @return The time taken for the update process in milliseconds.
+     * @throws Exception If an error occurs during updating.
+     */
+    private static long performUpdateBenchmark(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
+        // Log the start of the UPDATE benchmark
+        System.out.println("\n*** Testing UPDATE operation on " + dbName + " ***");
+
+        // Record the start time of the update process
+        long updateStartTime = System.currentTimeMillis();
+
+        // Prepare the values to update (e.g., increment 'bytes' field by 1000)
+        for (int i = 0; i < dataset.size(); i++) {
+            String key = "record" + i; // Generate the key corresponding to the record
+            Map<String, ByteIterator> valuesToUpdate = new HashMap<>();
+
+            // Read the existing record
+            HashMap<String, ByteIterator> existingRecord = new HashMap<>();
+            db.read("usertable", key, null, existingRecord);
+
+            // Get the 'bytes' field or assign default value if missing
+            String bytesStr = "0.0"; // Default value
+            ByteIterator bytesBI = existingRecord.get("bytes");
+            if (bytesBI != null) {
+                bytesStr = bytesBI.toString();
+            }
+
+            double bytesValue = 0.0;
+            try {
+                bytesValue = Double.parseDouble(bytesStr) + 1000.0;
+            } catch (NumberFormatException e) {
+                // Assign default value if parsing fails
+                System.err.println("Number format error for 'bytes' in key: " + key + ", assigning default value 0.0");
+                bytesValue = 1000.0; // Since we're adding 1000, start from 0
+            }
+
+            // Store the updated value
+            valuesToUpdate.put("bytes", new StringByteIterator(String.valueOf(bytesValue)));
+
+            // Perform the update operation
+            db.update("usertable", key, valuesToUpdate);
+        }
+
+        // Record the end time of the update process
+        long updateEndTime = System.currentTimeMillis();
+
+        // Calculate the total time taken for updating
+        long updateTime = updateEndTime - updateStartTime;
+
+        // Log the total time taken for updating
+        System.out.println("Update time: " + updateTime + " ms");
+
+        return updateTime;
+    }
+
+    /**
+     * Performs the delete benchmark by deleting records from the database.
+     *
+     * @param db      The database instance.
+     * @param dataset The dataset containing records to delete.
+     * @param dbName  The name of the database (for logging purposes).
+     * @return The time taken for the delete process in milliseconds.
+     * @throws Exception If an error occurs during deletion.
+     */
+    private static long performDeleteBenchmark(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
+        // Log the start of the DELETE benchmark
+        System.out.println("\n*** Testing DELETE operation on " + dbName + " ***");
+
+        // Record the start time of the delete process
+        long deleteStartTime = System.currentTimeMillis();
+
+        // Iterate through each record and delete it from the database
+        for (int i = 0; i < dataset.size(); i++) {
+            String key = "record" + i; // Generate the key corresponding to the record
+            db.delete("usertable", key); // Perform the delete operation
+        }
+
+        // Record the end time of the delete process
+        long deleteEndTime = System.currentTimeMillis();
+
+        // Calculate the total time taken for deletion
+        long deleteTime = deleteEndTime - deleteStartTime;
+
+        // Log the total time taken for deletion
+        System.out.println("Delete time: " + deleteTime + " ms");
+
+        return deleteTime;
+    }
+
+    /**
+     * Performs a custom query by filtering records based on certain criteria.
+     * Since Redis and Memcached are key-value stores, complex queries are not natively supported.
+     * We'll simulate the query by reading all records and applying the filter in the application layer.
+     * Example Query: Find all records where 'http_reply_code' is 200 and 'bytes' > 5000.
+     *
+     * @param db      The database instance.
+     * @param dataset The dataset containing records.
+     * @param dbName  The name of the database (for logging purposes).
+     * @return The time taken for the custom query in milliseconds.
+     * @throws Exception If an error occurs during the query.
+     */
+    private static long performCustomQuery(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
+        // Log the start of the custom query
+        System.out.println("\n*** Testing CUSTOM QUERY on " + dbName + " ***");
+        System.out.println("Query: Find records where 'http_reply_code' is 200 and 'bytes' > 5000");
+
+        // Record the start time of the query
+        long queryStartTime = System.currentTimeMillis();
+
+        // Container to hold the keys that match the criteria
+        List<String> matchingKeys = new ArrayList<>();
+
+        // Iterate through each record and apply the filter
+        for (int i = 0; i < dataset.size(); i++) {
+            String key = "record" + i;
+            HashMap<String, ByteIterator> result = new HashMap<>();
+            db.read("usertable", key, null, result);
+
+            // Retrieve the ByteIterator objects
+            ByteIterator replyCodeBI = result.get("http_reply_code");
+            ByteIterator bytesBI = result.get("bytes");
+
+            // Assign default values if fields are missing
+            String replyCodeStr = "0"; // Default value
+            String bytesStr = "0.0";   // Default value
+
+            if (replyCodeBI != null) {
+                replyCodeStr = replyCodeBI.toString();
+            }
+
+            if (bytesBI != null) {
+                bytesStr = bytesBI.toString();
+            }
+
+            int replyCode = 0;
+            double bytes = 0.0;
+
+            try {
+                // Parse the 'http_reply_code'
+                replyCode = (int) Double.parseDouble(replyCodeStr);
+            } catch (NumberFormatException e) {
+                // Assign default value if parsing fails
+                System.err.println("Number format error for 'http_reply_code' in key: " + key + ", assigning default value 0");
+                replyCode = 0;
+            }
+
+            try {
+                // Parse the 'bytes'
+                bytes = Double.parseDouble(bytesStr);
+            } catch (NumberFormatException e) {
+                // Assign default value if parsing fails
+                System.err.println("Number format error for 'bytes' in key: " + key + ", assigning default value 0.0");
+                bytes = 0.0;
+            }
+
+            // Apply the filter criteria
+            if (replyCode == 200 && bytes > 5000.0) {
+                matchingKeys.add(key);
+            }
+        }
+
+        // Record the end time of the query
+        long queryEndTime = System.currentTimeMillis();
+
+        // Calculate the total time taken for the query
+        long queryTime = queryEndTime - queryStartTime;
+
+        // Log the total time taken and number of matching records
+        System.out.println("Custom query time: " + queryTime + " ms");
+        System.out.println("Number of matching records: " + matchingKeys.size());
+
+        return queryTime;
     }
 
     /**
