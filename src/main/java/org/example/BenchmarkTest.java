@@ -22,7 +22,7 @@ import java.io.*;
 public class BenchmarkTest {
 
     // Define the dataset sizes to be tested
-    private static final int[] DATASET_SIZES = {1000, 10000, 100000};
+    private static final int[] DATASET_SIZES = {1000, 10000, 100000,1000000};
 
     // Path to the output CSV file
     private static final String OUTPUT_CSV_FILE = "output/benchmark_results.csv";
