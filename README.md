@@ -14,7 +14,11 @@ The benchmark results provide insights into the performance and scalability of R
 ### Prerequisites
 1. Ensure **Java 8** or a newer version is installed on your system.
 2. Make sure you have at least **4GB of available RAM** for the benchmarking process.
-3. Redis and Memcached servers should be running locally:
+4. Load the data in the two databases by running the two scripts in the src/main/Python folder in the following order:
+   - `converterData.py` to convert the data into kay-value.
+   - `uploadFileDB.py` to load the data into the db.
+### Be sure that the file with the data that you want to load is in the same directory as the scripts, ex: https://ita.ee.lbl.gov/html/contrib/NASA-HTTP.html
+5. Redis and Memcached servers should be running locally:
    - Redis on port `6379`
    - Memcached on port `11211`
 
