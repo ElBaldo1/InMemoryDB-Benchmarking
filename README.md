@@ -43,8 +43,15 @@ Ensure that the rebuilt JAR contains the required classes (e.g., MemcachedClient
 ```bash
 jar tf target/memdbJava-1.0-SNAPSHOT.jar | grep MemcachedClient
 ```
+### 5. Run the 2 db
+   Run the following command to start the Redis and Memcached servers:
+```bash
+memcached -p 11211 -u nobody -d
+redis-server
+```
 
-### 4. Run the Application
+
+### 5. Run the Application
    To execute the benchmarking application using the newly built JAR, use the command below:
 ```bash
 java -Xmx4g -jar target/memdbJava-1.0-SNAPSHOT.jar
