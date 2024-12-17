@@ -1,82 +1,145 @@
-# In-Memory Database Benchmarking
+# 🚀 In-Memory Database Benchmarking
 
 ## Project Overview
-This project benchmarks the performance of two in-memory database technologies, **Redis** and **Memcached**, using datasets of varying sizes. The benchmarking process involves testing two operations:
-1. **Insertions:** Adding dataset entries into the database.
-2. **Reads:** Retrieving dataset entries from the database.
 
-The benchmark results provide insights into the performance and scalability of Redis and Memcached for different dataset sizes.
+This project benchmarks the performance of two in-memory database technologies, **Redis** and **Memcached**, using datasets of varying sizes. The benchmarking focuses on two key operations:
 
----
+1. **Insertions**: Adding dataset entries into the database.  
+2. **Reads**: Retrieving dataset entries from the database.  
 
-## How to Run the Project
-
-### Prerequisites
-1. Ensure **Java 8** or a newer version is installed on your system.
-2. Make sure you have at least **4GB of available RAM** for the benchmarking process.
-3. Install the **Yahoo! Cloud Serving Benchmark (YCSB)** tools and the necessary dependencies for Redis and Memcached.
-
-   - **Download and Install YCSB**:
-     ```bash
-     git clone https://github.com/brianfrankcooper/YCSB.git
-     cd YCSB
-     mvn clean package
-     ```
-   - **Add Redis and Memcached YCSB Dependencies**:
-     ```bash
-     mvn -pl site.ycsb:redis-binding -am clean package
-     mvn -pl site.ycsb:memcached-binding -am clean package
-     ```
-
-4. Redis and Memcached servers should be running locally:
-   - Redis on port `6379`
-   - Memcached on port `11211`
+The benchmarking results provide insights into the **performance** and **scalability** of Redis and Memcached when handling datasets of different sizes.
 
 ---
 
+## Table of Contents
+1. [Prerequisites](#prerequisites)
+2. [Setup Instructions](#setup-instructions)
+3. [Running the Benchmark](#running-the-benchmark)
+4. [Rebuilding the JAR](#rebuilding-the-jar)
+5. [Results and Output](#results-and-output)
+6. [Error Handling](#error-handling)
+7. [Additional Notes](#additional-notes)
+8. [License](#license)
 
-### Command to Run the Tests
-To execute the benchmarking tests, use the following command:
+---
+
+## Prerequisites
+
+To set up and run the project, ensure you have the following:
+- **Java 8** or a newer version installed.
+- At least **4GB of RAM** available.
+- **YCSB** (Yahoo! Cloud Serving Benchmark) tools installed.
+- Local installations of **Redis** and **Memcached**:
+  - Redis runs on port `6379`.
+  - Memcached runs on port `11211`.
+
+---
+
+## Setup Instructions
+
+### 1. Clone and Install YCSB Tools
+
+Clone the YCSB repository and install dependencies:
+
+```bash
+git clone https://github.com/brianfrankcooper/YCSB.git
+cd YCSB
+mvn clean package
+```
+
+Install Redis and Memcached bindings:
+
+```bash
+mvn -pl site.ycsb:redis-binding -am clean package
+mvn -pl site.ycsb:memcached-binding -am clean package
+```
+
+### 2. Start Redis and Memcached Servers
+
+Run Redis and Memcached in separate terminal windows:
+
+```bash
+redis-server
+memcached -p 11211 -u nobody -d
+```
+
+---
+
+## Running the Benchmark
+
+### 1. Run the Pre-Built JAR
+
+Execute the benchmarking tests using the provided pre-built JAR file:
 
 ```bash
 java -Xmx4g -jar out/artifacts/memdbJava_jar/memdbJava.jar
 ```
-## Steps to Rebuild the JAR
-### 1. Clean the Maven Build Directory
-   To clean the existing build artifacts, run the following command:
-```bash
-mvn clean
-```
 
-### 2. Build the JAR
-To rebuild the JAR after making changes to the code, execute the following Maven command:
-```bash
-mvn package
-```
+### 2. Generate Output Folder
 
-### 3. Verify the Rebuilt JAR
-Ensure that the rebuilt JAR contains the required classes (e.g., MemcachedClient) by running:
+To store the benchmarking results, create an `output` folder in the same directory as `BenchmarkTest.java`:
 
 ```bash
-jar tf target/memdbJava-1.0-SNAPSHOT.jar | grep MemcachedClient
-```
-### 5. Run the 2 db
-   Run the following command to start the Redis and Memcached servers in two different terminal windows:
-```bash
-memcached -p 11211 -u nobody -d
-redis-server
+mkdir output
 ```
 
+---
 
-### 5. Run the Application
-   To execute the benchmarking application using the newly built JAR, use the command below:
-```bash
-java -Xmx4g -jar target/memdbJava-1.0-SNAPSHOT.jar
-```
-### To see the results of the benchmarking, create the folder 'output' in the directory of the benchmarkTest.java file
-# For more details check the comments in the files
+## Rebuilding the JAR
 
-### The result map in custom query does not contain the key "http_reply_code" or "bytes" for some records, so result.get("http_reply_code") or result.get("bytes") returns null, leading to the NullPointerException when calling toString() on null.
-### We can choose to skip these records, assign default values, or log a warning. I have chosen to assign default values to avoid the NullPointerException.
-For both 'http_reply_code' and 'bytes' fields, if they are missing (replyCodeBI == null or bytesBI == null), we assign default values of "0" and "0.0", respectively.
-If parsing fails, we assign default numerical values to replyCode and bytes.
+### Step-by-Step Instructions:
+
+1. **Clean Existing Builds**:
+   ```bash
+   mvn clean
+   ```
+
+2. **Build the JAR**:
+   ```bash
+   mvn package
+   ```
+
+3. **Verify the Rebuilt JAR**:
+   Check if the required classes (e.g., `MemcachedClient`) exist:
+   ```bash
+   jar tf target/memdbJava-1.0-SNAPSHOT.jar | grep MemcachedClient
+   ```
+
+4. **Run the New JAR**:
+   ```bash
+   java -Xmx4g -jar target/memdbJava-1.0-SNAPSHOT.jar
+   ```
+
+---
+
+## Results and Output
+
+The benchmarking results will be saved as a CSV file in the `output` folder, for example:
+
+- `output/benchmark_results.csv`
+
+This file contains performance metrics such as:
+- Insert and read operation times.
+- Latency for Redis and Memcached.
+
+---
+
+## Error Handling
+
+### NullPointerException Handling
+
+- Some records may not contain the keys `http_reply_code` or `bytes`.  
+- To handle missing values:
+  - **Default Values** are assigned:  
+    - `http_reply_code`: `"0"`  
+    - `bytes`: `"0.0"`
+
+- If parsing fails, default numerical values are used to prevent crashes.
+
+---
+
+## Additional Notes
+
+- All project comments and custom logic details can be found directly in the source files.  
+- Key file: `BenchmarkTest.java`
+
