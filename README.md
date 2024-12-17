@@ -14,9 +14,26 @@ The benchmark results provide insights into the performance and scalability of R
 ### Prerequisites
 1. Ensure **Java 8** or a newer version is installed on your system.
 2. Make sure you have at least **4GB of available RAM** for the benchmarking process.
-3. Redis and Memcached servers should be running locally:
+3. Install the **Yahoo! Cloud Serving Benchmark (YCSB)** tools and the necessary dependencies for Redis and Memcached.
+
+   - **Download and Install YCSB**:
+     ```bash
+     git clone https://github.com/brianfrankcooper/YCSB.git
+     cd YCSB
+     mvn clean package
+     ```
+   - **Add Redis and Memcached YCSB Dependencies**:
+     ```bash
+     mvn -pl site.ycsb:redis-binding -am clean package
+     mvn -pl site.ycsb:memcached-binding -am clean package
+     ```
+
+4. Redis and Memcached servers should be running locally:
    - Redis on port `6379`
    - Memcached on port `11211`
+
+---
+
 
 ### Command to Run the Tests
 To execute the benchmarking tests, use the following command:
@@ -44,7 +61,7 @@ Ensure that the rebuilt JAR contains the required classes (e.g., MemcachedClient
 jar tf target/memdbJava-1.0-SNAPSHOT.jar | grep MemcachedClient
 ```
 ### 5. Run the 2 db
-   Run the following command to start the Redis and Memcached servers:
+   Run the following command to start the Redis and Memcached servers in two different terminal windows:
 ```bash
 memcached -p 11211 -u nobody -d
 redis-server

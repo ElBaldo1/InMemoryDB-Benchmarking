@@ -18,18 +18,19 @@ import com.google.gson.reflect.TypeToken;
 /**
  * BenchmarkTest is a benchmarking tool that evaluates the performance of Redis and Memcached
  * using the YCSB framework. It measures INSERT, READ, UPDATE, DELETE operations and records the results.
- * It also performs a custom query at the end. After the benchmark is complete, it clears both Redis and Memcached databases.
+ * It also performs a custom query at the end. After finishing each dataset size test,
+ * it clears both Redis and Memcached databases, ensuring a clean state before testing the next dataset size.
  *
  * Key points:
  * - We serialize all fields of each record into a single JSON (stored in field0).
  * - We use a consistent key prefix (e.g., "ab-") so that keys match the naming convention used by Memcached.
- * - This approach ensures that the code works smoothly with both Redis and Memcached.
+ * - After each dataset size's benchmark is completed, we flush both databases.
  */
 
 public class BenchmarkTest {
 
-    // Define the dataset sizes to be tested. We can use multiple sizes, here just one (1000).
-    private static final int[] DATASET_SIZES = {1000,10000,100000};
+    // Define the dataset sizes to be tested.
+    private static final int[] DATASET_SIZES = {1000, 10000, 100000, 1000000};
     // Output CSV file for benchmark results
     private static final String OUTPUT_CSV_FILE = "output/benchmark_results.csv";
 
@@ -43,6 +44,9 @@ public class BenchmarkTest {
     private static final String KEY_PREFIX = "ab-";
 
     public static void main(String[] args) throws Exception {
+        System.out.println("Starting BenchmarkTest...");
+        clearRedis();
+        clearMemcached();
         System.out.println("Current Working Directory: " + System.getProperty("user.dir"));
 
         File outputDir = new File("output");
@@ -50,8 +54,9 @@ public class BenchmarkTest {
             outputDir.mkdirs();
         }
 
-        // Configure log4j for logging
+        // Configure log4j for logging because YCSB uses log4j for logging
         PropertyConfigurator.configure(BenchmarkTest.class.getClassLoader().getResource("log4j.properties"));
+        // sets the logging level for the logger associated with the package net.spy.memcached to ERROR
         Logger.getLogger("net.spy.memcached").setLevel(org.apache.log4j.Level.ERROR);
 
         // Initialize CSV writer for storing benchmark results
@@ -70,8 +75,14 @@ public class BenchmarkTest {
             System.out.println("Testing with dataset size: " + size);
             System.out.println("-----------------------------------------------");
 
+            // Initialize properties for Redis
             Properties redisProps = initializeRedisProperties(size);
+
+            // Run the benchmark and write results to the CSV file
             runBenchmark(redisProps, size, "Redis", csvWriter);
+
+            // Clear Redis database after each test
+            clearRedis();
         }
 
         // -------------------------------------
@@ -88,6 +99,8 @@ public class BenchmarkTest {
 
             Properties memcachedProps = initializeMemcachedProperties(size);
             runBenchmark(memcachedProps, size, "Memcached", csvWriter);
+
+            clearMemcached();
         }
 
         System.out.println("\n===============================================");
@@ -95,15 +108,10 @@ public class BenchmarkTest {
         System.out.println("===============================================\n");
 
         csvWriter.close();
-
-        // After all benchmarks are done, let's clear both Redis and Memcached.
-        clearRedis();
-        clearMemcached();
     }
 
     /**
      * Initialize properties for Redis.
-     * This sets up a YCSB "database" configuration targeting the Redis binding.
      */
     private static Properties initializeRedisProperties(int size) {
         Properties props = new Properties();
@@ -118,7 +126,6 @@ public class BenchmarkTest {
 
     /**
      * Initialize properties for Memcached.
-     * This sets up a YCSB "database" configuration targeting the Memcached binding.
      */
     private static Properties initializeMemcachedProperties(int size) {
         Properties props = new Properties();
@@ -135,16 +142,21 @@ public class BenchmarkTest {
      * Writes results to the CSV file.
      */
     private static void runBenchmark(Properties props, int datasetSize, String dbName, CSVWriter csvWriter) throws Exception {
-        // Set fieldcount for YCSB measurement
+        // Set fieldcount for YCSB measurement  ---> 5 fields because we have 5 fields in our dataset
         props.setProperty("fieldcount", "5");
+
+        // Set properties for YCSB measurements (time taken for each operation)
         Measurements.setProperties(props);
 
+        // tracer to measure the performance
+        // Nooptracer --> trace or monitor individual operations, such as logs, spans, or distributed traces,
+        // simply fulfills the requirement for a Tracer object where one is expected (like YCSB’s API) without doing anything.
         Tracer tracer = new Builder("NoopTracer").build();
         DB db = DBFactory.newDB(props.getProperty("db"), props, tracer);
 
         db.init();
 
-        // Load dataset from a JSON file (the NASA HTTP logs)
+        // Load dataset from a JSON file
         List<Map<String, ByteIterator>> dataset = loadDataset(datasetSize);
 
         // Perform operations and record times
@@ -168,7 +180,6 @@ public class BenchmarkTest {
 
     /**
      * Insert all fields of each record as a single JSON object in field0.
-     * Use KEY_PREFIX + "record" + i as the key to ensure consistency for Memcached.
      */
     private static long performInsertionBenchmark(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
         System.out.println("\n*** Testing INSERT operation on " + dbName + " ***");
@@ -179,19 +190,16 @@ public class BenchmarkTest {
             String key = KEY_PREFIX + "record" + i;
             Map<String, ByteIterator> originalEntry = dataset.get(i);
 
-            // Build a map of field-value pairs
             Map<String, String> dataMap = new HashMap<>();
             for (String fname : FIELD_NAMES) {
                 ByteIterator val = originalEntry.get(fname);
                 dataMap.put(fname, val != null ? val.toString() : "0");
             }
 
-            // Serialize to JSON
             String jsonValue = gson.toJson(dataMap);
             Map<String, ByteIterator> ycsbEntry = new HashMap<>();
             ycsbEntry.put("field0", new StringByteIterator(jsonValue));
 
-            // Insert into the DB
             db.insert("usertable", key, ycsbEntry);
         }
 
@@ -201,24 +209,8 @@ public class BenchmarkTest {
         return insertionTime;
     }
 
-    /**
-     * Deserialize the fields from the JSON stored in field0.
-     */
-    private static Map<String, String> deserializeFields(HashMap<String, ByteIterator> result) {
-        Gson gson = new Gson();
-        ByteIterator field0 = result.get("field0");
-        if (field0 == null) {
-            // If field0 is missing, return an empty, modifiable map
-            return new HashMap<>();
-        }
-        String jsonValue = field0.toString();
-        Map<String, String> tempMap = gson.fromJson(jsonValue, new TypeToken<Map<String, String>>(){}.getType());
-        return new HashMap<>(tempMap);
-    }
 
-    /**
-     * Perform READ benchmark: Retrieve each record by key and print the first two for debugging.
-     */
+
     private static long performReadBenchmark(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
         System.out.println("\n*** Testing READ operation on " + dbName + " ***");
         long readStartTime = System.currentTimeMillis();
@@ -228,10 +220,8 @@ public class BenchmarkTest {
             HashMap<String, ByteIterator> result = new HashMap<>();
             db.read("usertable", key, FIELDS, result);
 
+            // Even if we don't print them here, we deserialize to ensure correctness
             Map<String, String> dataMap = deserializeFields(result);
-            if (i < 2) {
-                System.out.println("Read key: " + key + ", data: " + dataMap);
-            }
         }
 
         long readEndTime = System.currentTimeMillis();
@@ -240,9 +230,6 @@ public class BenchmarkTest {
         return readTime;
     }
 
-    /**
-     * Perform UPDATE benchmark: Increase the 'bytes' field by 1000 for each record.
-     */
     private static long performUpdateBenchmark(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
         System.out.println("\n*** Testing UPDATE operation on " + dbName + " ***");
         Gson gson = new Gson();
@@ -277,9 +264,6 @@ public class BenchmarkTest {
         return updateTime;
     }
 
-    /**
-     * Perform DELETE benchmark: Remove each record from the database.
-     */
     private static long performDeleteBenchmark(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
         System.out.println("\n*** Testing DELETE operation on " + dbName + " ***");
 
@@ -296,10 +280,6 @@ public class BenchmarkTest {
         return deleteTime;
     }
 
-    /**
-     * Perform a custom query: find all records where 'http_reply_code' is 200 and 'bytes' > 5000.
-     * We simulate a "query" by scanning all keys and filtering client-side, since Memcached doesn't support queries.
-     */
     private static long performCustomQuery(DB db, List<Map<String, ByteIterator>> dataset, String dbName) throws Exception {
         System.out.println("\n*** Testing CUSTOM QUERY on " + dbName + " ***");
         System.out.println("Query: Find records where 'http_reply_code' is 200 and 'bytes' > 5000");
@@ -334,9 +314,6 @@ public class BenchmarkTest {
         return queryTime;
     }
 
-    /**
-     * Load the dataset from a JSON file. Each entry is converted into a map of String->ByteIterator.
-     */
     private static List<Map<String, ByteIterator>> loadDataset(int size) throws IOException {
         List<Map<String, ByteIterator>> dataset = new ArrayList<>();
 
@@ -345,8 +322,10 @@ public class BenchmarkTest {
             throw new FileNotFoundException("File not found: parsed_NASA_access_log.json");
         }
 
+        // Read the JSON file into a map because the JSON file is an array of JSON objects
         BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-        com.google.gson.Gson gson = new com.google.gson.Gson();
+        Gson gson = new Gson();
+        // Use TypeToken to deserialize the JSON array to a list of maps of key-value pairs
         Map<String, Object>[] jsonArray = gson.fromJson(reader, Map[].class);
         reader.close();
 
@@ -357,6 +336,7 @@ public class BenchmarkTest {
             Map<String, ByteIterator> entry = new HashMap<>();
 
             for (Map.Entry<String, Object> jsonEntry : jsonMap.entrySet()) {
+                // Convert all values to StringByteIterator because YCSB expects ByteIterator
                 entry.put(jsonEntry.getKey(), new StringByteIterator(jsonEntry.getValue().toString()));
             }
             dataset.add(entry);
@@ -365,10 +345,6 @@ public class BenchmarkTest {
         return dataset;
     }
 
-    /**
-     * Clears the Redis database by running 'redis-cli FLUSHALL'.
-     * This removes all keys from Redis.
-     */
     private static void clearRedis() {
         try {
             System.out.println("Clearing Redis database...");
@@ -380,10 +356,6 @@ public class BenchmarkTest {
         }
     }
 
-    /**
-     * Clears the Memcached database by sending 'flush_all' command via netcat (nc).
-     * This removes all keys from Memcached.
-     */
     private static void clearMemcached() {
         try {
             System.out.println("Clearing Memcached database...");
@@ -394,5 +366,22 @@ public class BenchmarkTest {
         } catch (Exception e) {
             System.err.println("Error clearing Memcached: " + e.getMessage());
         }
+    }
+
+    /**
+     * Deserialize fields from JSON in field0.
+     */
+    private static Map<String, String> deserializeFields(HashMap<String, ByteIterator> result) {
+        Gson gson = new Gson();
+        // Get the JSON string from field0
+        ByteIterator field0 = result.get("field0");
+        if (field0 == null) {
+            return new HashMap<>();
+        }
+        // Convert the JSON string to a map because we serialized all fields into a single JSON object
+        String jsonValue = field0.toString();
+        // Use TypeToken to deserialize the JSON string to a map of key-value pairs
+        Map<String, String> tempMap = gson.fromJson(jsonValue, new TypeToken<Map<String, String>>(){}.getType());
+        return new HashMap<>(tempMap);
     }
 }
